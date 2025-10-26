@@ -18,7 +18,7 @@ class HuggingFaceEmbeddings extends Embeddings {
   constructor(apiKey: string, params: AsyncCallerParams = {}) {
     super(params);
     this.apiKey = apiKey;
-    this.apiUrl = "https://router.huggingface.co/hf-inference/models/sentence-transformers/paraphrase-MiniLM-L6-v2";
+    this.apiUrl = "https://router.huggingface.co/hf-inference/models/BAAI/bge-small-en-v1.5";
   }
 
   async embedDocuments(texts: string[]): Promise<number[][]> {
@@ -34,11 +34,15 @@ class HuggingFaceEmbeddings extends Embeddings {
 
   async embedQuery(text: string): Promise<number[]> {
     try {
+      console.log("🔍 Embedding text:", text.substring(0, 50) + "...");
+
+
       const response = await fetch(this.apiUrl, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "Accept": "application/json"
         },
         body: JSON.stringify({
           inputs: text
@@ -46,13 +50,44 @@ class HuggingFaceEmbeddings extends Embeddings {
       });
 
       if (!response.ok) {
-        throw new Error(`Hugging Face API error: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error("HUGGING FACE API ERROR:", {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`Hugging Face API error: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      return data;
+
+      console.log("📦 Raw API response:", JSON.stringify(data).substring(0, 200));
+      
+      // Handle different response formats
+      let embedding: number[];
+      
+      if (Array.isArray(data) && typeof data[0] === 'number') {
+        // Direct array of numbers
+        embedding = data;
+      } else if (Array.isArray(data) && Array.isArray(data[0])) {
+        // Nested array [[embedding]]
+        embedding = data[0];
+      } else if (data.embeddings && Array.isArray(data.embeddings)) {
+        // {embeddings: [...]}
+        embedding = Array.isArray(data.embeddings[0]) ? data.embeddings[0] : data.embeddings;
+      } else {
+        console.error("❌ Unexpected response format:", data);
+        throw new Error(`Invalid embedding response format: ${JSON.stringify(data)}`);
+      }
+      
+      if (!Array.isArray(embedding) || embedding.length === 0) {
+        throw new Error("Embedding is not a valid array");
+      }
+      
+      console.log("✅ Embedding generated, dimension:", embedding.length);
+      return embedding;
     } catch (error) {
-      console.error("Error calling Hugging Face API:", error);
+      console.error("❌ Error calling Hugging Face API:", error);
       throw error;
     }
   }
