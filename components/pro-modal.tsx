@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 
 import { useProModal } from "@/hooks/use-pro-modal";
@@ -14,6 +14,13 @@ export const ProModal = () => {
 
     const [loading, setLoading] = useState(false);
 
+    //preventing hydration warnings:
+    const [isMounted, setisMounted] = useState(false);
+
+    useEffect(() => {
+        setisMounted(true);
+    }, [])
+
     const onSubscribe = async () => {
         try {
             setLoading(true);
@@ -26,6 +33,10 @@ export const ProModal = () => {
         } finally {
             setLoading(false);
         }
+    }
+
+    if (!isMounted) {
+        return null;
     }
 
     return (
